@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useRef } from "react";
+/* eslint-disable no-unused-vars */
+import { useState, useEffect, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
-  RotateCcw,
   ZoomIn,
   ZoomOut,
-  RotateCw,
   Maximize,
   X,
 } from "lucide-react";
@@ -204,13 +203,6 @@ const App = () => {
     }));
   };
 
-  const rotatePage = (pageId) => {
-    setPageRotations((prev) => ({
-      ...prev,
-      [pageId]: (prev[pageId] + 90) % 360,
-    }));
-  };
-
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
   };
@@ -245,28 +237,13 @@ const App = () => {
     }
   };
 
-  const resetBook = () => {
-    setCurrentPage(0);
-    setIsTransitioning(false);
-    setIsFullscreen(false);
-    // Reset all zooms and rotations
-    const resetZooms = {};
-    const resetRotations = {};
-    pages.forEach((page) => {
-      resetZooms[page.id] = 1;
-      resetRotations[page.id] = 0;
-    });
-    setPageZooms(resetZooms);
-    setPageRotations(resetRotations);
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-amber-600 mx-auto mb-4"></div>
           <h2 className="text-2xl font-bold text-amber-900 mb-2">
-            Cargando tu libro...
+            Cargando el libro...
           </h2>
           <p className="text-amber-700">Procesando páginas del PDF</p>
         </div>
@@ -312,13 +289,6 @@ const App = () => {
             title="Zoom In"
           >
             <ZoomIn className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => rotatePage(page.id)}
-            className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white p-2 rounded-lg transition-all shadow-lg"
-            title="Rotate"
-          >
-            <RotateCw className="w-5 h-5" />
           </button>
           <button
             onClick={toggleFullscreen}
@@ -386,12 +356,8 @@ const App = () => {
           {/* Header */}
           <div className="text-center mb-6">
             <h1 className="text-4xl font-bold text-amber-900 mb-2 flex items-center justify-center gap-3">
-              <BookOpen className="text-amber-700" />
-              Mi Libro Digital
+              Historia de 9 de Julio
             </h1>
-            <p className="text-amber-700">
-              {pages.length} páginas • Página {currentPage + 1}
-            </p>
           </div>
 
           {/* Controls */}
@@ -416,14 +382,6 @@ const App = () => {
               className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white p-4 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               <ChevronRight className="w-8 h-8" />
-            </button>
-
-            <button
-              onClick={resetBook}
-              className="bg-gray-600 hover:bg-gray-700 text-white p-4 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl ml-4"
-              title="Volver al inicio y resetear todo"
-            >
-              <RotateCcw className="w-8 h-8" />
             </button>
           </div>
         </>
@@ -450,7 +408,7 @@ const App = () => {
                     : "bg-amber-300 hover:bg-amber-400 hover:scale-110"
                 }`}
                 title={`Ir a página ${i + 1}`}
-              />
+              ></button>
             ))}
           </div>
 
