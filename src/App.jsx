@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -18,14 +18,14 @@ const App = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [pdfDoc, setPdfDoc] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [totalPages, setTotalPages] = useState(0);
 
-  // Estados para zoom y rotación por página
+  const pagesRef = useRef([]);
   const [pageZooms, setPageZooms] = useState({});
   const [pageRotations, setPageRotations] = useState({});
 
   // Configurar PDF.js
   useEffect(() => {
-    // Cargar PDF.js desde CDN
     const script = document.createElement("script");
     script.src =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
@@ -57,141 +57,130 @@ const App = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentPage, pages.length, isTransitioning, isFullscreen]);
+  }, [currentPage, totalPages, isTransitioning, isFullscreen]);
 
-  // Función para cargar el PDF desde la carpeta public
+  // Cargar documento PDF
   const loadPDF = async () => {
     try {
       setIsLoading(true);
-
-      // Cambia '' por el nombre de tu archivo
       const url = "https://staticfiles.magonservices.cloud/Libro.pdf";
       const loadingTask = window.pdfjsLib.getDocument(url);
       const pdf = await loadingTask.promise;
 
       setPdfDoc(pdf);
-      await renderAllPages(pdf);
+      setTotalPages(pdf.numPages);
+
+      // Inicializar arreglo de páginas
+      const initialPages = Array.from({ length: pdf.numPages }, (_, i) => ({
+        id: i + 1,
+        loading: true,
+        image: null,
+        text: "",
+        content: `Página ${i + 1}`,
+      }));
+
+      setPages(initialPages);
+      pagesRef.current = initialPages;
+
+      // Inicializar zoom y rotación
+      const initialZooms = {};
+      const initialRotations = {};
+      initialPages.forEach((page) => {
+        initialZooms[page.id] = 1;
+        initialRotations[page.id] = 0;
+      });
+
+      setPageZooms(initialZooms);
+      setPageRotations(initialRotations);
+      setIsLoading(false);
+
+      // Cargar primera página
+      renderPage(1);
     } catch (error) {
       console.error("Error cargando PDF:", error);
-      // Si falla con libro.pdf, intenta con otros nombres comunes
-      tryAlternativeFiles();
+      setIsLoading(false);
     }
   };
 
-  // Intentar con nombres alternativos si no encuentra el archivo
-  const tryAlternativeFiles = async () => {
-    const alternativeNames = [
-      "documento.pdf",
-      "manual.pdf",
-      "book.pdf",
-      "mi-libro.pdf",
-    ];
+  // Renderizar página específica (lazy loading)
+  const renderPage = async (pageNumber) => {
+    if (!pdfDoc || pagesRef.current[pageNumber - 1]?.image) return;
 
-    for (const fileName of alternativeNames) {
+    try {
+      // Actualizar estado de carga
+      setPages((prev) =>
+        prev.map((page) =>
+          page.id === pageNumber ? { ...page, loading: true } : page
+        )
+      );
+
+      const page = await pdfDoc.getPage(pageNumber);
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+
+      const viewport = page.getViewport({ scale: 2 });
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({
+        canvasContext: context,
+        viewport: viewport,
+      }).promise;
+
+      // Extraer texto
+      let pageText = "";
       try {
-        const url = `/${fileName}`;
-        const loadingTask = window.pdfjsLib.getDocument(url);
-        const pdf = await loadingTask.promise;
-
-        setPdfDoc(pdf);
-        await renderAllPages(pdf);
-        return;
-      } catch (error) {
-        console.log(`No se encontró ${fileName}`);
+        const textContent = await page.getTextContent();
+        pageText = textContent.items.map((item) => item.str).join(" ");
+      } catch (textError) {
+        pageText = `Contenido de la página ${pageNumber}`;
       }
-    }
 
-    // Si no encuentra ningún archivo, crear páginas de ejemplo
-    createExamplePages();
+      const updatedPage = {
+        id: pageNumber,
+        loading: false,
+        image: canvas.toDataURL(),
+        text: pageText.substring(0, 500) + (pageText.length > 500 ? "..." : ""),
+        content: `Página ${pageNumber}`,
+      };
+
+      // Actualizar estado
+      setPages((prev) =>
+        prev.map((p) => (p.id === pageNumber ? updatedPage : p))
+      );
+      pagesRef.current[pageNumber - 1] = updatedPage;
+    } catch (error) {
+      console.error(`Error renderizando página ${pageNumber}:`, error);
+      setPages((prev) =>
+        prev.map((p) =>
+          p.id === pageNumber
+            ? {
+                ...p,
+                loading: false,
+                image: null,
+                text: `Error al cargar la página ${pageNumber}`,
+              }
+            : p
+        )
+      );
+    }
   };
 
-  // Renderizar todas las páginas del PDF
-  const renderAllPages = async (pdf) => {
-    const pdfPages = [];
-    const initialZooms = {};
-    const initialRotations = {};
+  // Precargar páginas adyacentes
+  useEffect(() => {
+    if (!pdfDoc) return;
 
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      try {
-        const page = await pdf.getPage(pageNum);
-        const canvas = document.createElement("canvas");
-        const context = canvas.getContext("2d");
+    // Página actual
+    renderPage(currentPage + 1);
 
-        // Configurar el viewport para buena calidad
-        const viewport = page.getViewport({ scale: 2 });
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-
-        // Renderizar la página
-        await page.render({
-          canvasContext: context,
-          viewport: viewport,
-        }).promise;
-
-        // Extraer texto de la página
-        let pageText = "";
-        try {
-          const textContent = await page.getTextContent();
-          pageText = textContent.items.map((item) => item.str).join(" ");
-        } catch (textError) {
-          pageText = `Contenido de la página ${pageNum}`;
-        }
-
-        pdfPages.push({
-          id: pageNum,
-          content: `Página ${pageNum}`,
-          image: canvas.toDataURL(),
-          text:
-            pageText.substring(0, 500) + (pageText.length > 500 ? "..." : ""),
-        });
-
-        // Inicializar zoom y rotación para cada página
-        initialZooms[pageNum] = 1;
-        initialRotations[pageNum] = 0;
-      } catch (pageError) {
-        console.error(`Error renderizando página ${pageNum}:`, pageError);
-        pdfPages.push({
-          id: pageNum,
-          content: `Página ${pageNum}`,
-          image: null,
-          text: `Error al cargar la página ${pageNum}`,
-        });
-        initialZooms[pageNum] = 1;
-        initialRotations[pageNum] = 0;
-      }
+    // Páginas adyacentes
+    if (currentPage > 0) {
+      renderPage(currentPage);
     }
-
-    setPages(pdfPages);
-    setPageZooms(initialZooms);
-    setPageRotations(initialRotations);
-    setCurrentPage(0);
-    setIsLoading(false);
-  };
-
-  // Crear páginas de ejemplo si no se encuentra el PDF
-  const createExamplePages = () => {
-    const examplePages = Array.from({ length: 12 }, (_, i) => ({
-      id: i + 1,
-      content: `Página ${i + 1}`,
-      image: null,
-      text: `Esta es la página ${
-        i + 1
-      } de ejemplo. Coloca tu archivo PDF en la carpeta public/ con el nombre 'libro.pdf' o modifica el código para usar el nombre de tu archivo.`,
-    }));
-
-    const initialZooms = {};
-    const initialRotations = {};
-    for (let i = 1; i <= 12; i++) {
-      initialZooms[i] = 1;
-      initialRotations[i] = 0;
+    if (currentPage + 1 < totalPages) {
+      renderPage(currentPage + 2);
     }
-
-    setPages(examplePages);
-    setPageZooms(initialZooms);
-    setPageRotations(initialRotations);
-    setCurrentPage(0);
-    setIsLoading(false);
-  };
+  }, [currentPage, pdfDoc, totalPages]);
 
   // Funciones de zoom
   const zoomIn = (pageId) => {
