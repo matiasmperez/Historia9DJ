@@ -8,6 +8,7 @@ import {
   ZoomOut,
   Maximize,
   X,
+  Copyright,
 } from "lucide-react";
 
 const App = () => {
@@ -355,8 +356,8 @@ const App = () => {
         <>
           {/* Header */}
           <div className="text-center mb-6">
-            <h1 className="text-4xl font-bold text-amber-900 mb-2 flex items-center justify-center gap-3">
-              Historia de 9 de Julio
+            <h1 className="font-mono text-4xl font-bold mb-2 text-amber-900 flex items-center justify-center gap-3 uppercase">
+              Suplemento el orden 75 aniversario de 9 de julio
             </h1>
           </div>
 
@@ -413,11 +414,28 @@ const App = () => {
           </div>
 
           {/* Instructions */}
-          <div className="text-center mt-6 text-gray-600 text-sm">
-            <p>
-              Usa las flechas del teclado para navegar • F para pantalla
-              completa • Click en imagen para ampliar
-            </p>
+          <div className="text-center mt-8 py-6 ">
+            <div className="flex items-center justify-center gap-2 text-gray-600 text-sm mb-2">
+              <Copyright className="w-4 h-4" />
+              <span>Digitalizado por</span>
+              <a
+                href="https://www.instagram.com/magonsoftware/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-black-600 hover:text-black-800 transition-colors duration-200 hover:underline"
+              >
+                MagonSoftware
+              </a>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              <span>Diseño y desarrollo de sistemas a medida</span>
+            </div>
+
+            {/* Decorative line */}
+            <div className="flex items-center justify-center mt-4">
+              <div className="h-px bg-gradient-to-r from-transparent via-gray-300 to-transparent w-32"></div>
+            </div>
           </div>
         </>
       )}
