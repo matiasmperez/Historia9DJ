@@ -3,12 +3,15 @@ import { useState, useEffect, useRef } from "react";
 import {
   ChevronLeft,
   ChevronRight,
-  BookOpen,
   ZoomIn,
   ZoomOut,
   Maximize,
   X,
   Copyright,
+  Move,
+  Undo,
+  Expand,
+  RotateCcw,
 } from "lucide-react";
 
 const App = () => {
@@ -23,6 +26,10 @@ const App = () => {
   const pagesRef = useRef([]);
   const [pageZooms, setPageZooms] = useState({});
   const [pageRotations, setPageRotations] = useState({});
+  const [pagePanPositions, setPagePanPositions] = useState({});
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [isPanMode, setIsPanMode] = useState(false);
 
   // Configurar PDF.js
   useEffect(() => {
@@ -44,14 +51,17 @@ const App = () => {
   // Manejar teclas de navegación
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key === "ArrowLeft") {
+      if (event.key === "ArrowLeft" && !isPanMode) {
         prevPage();
-      } else if (event.key === "ArrowRight") {
+      } else if (event.key === "ArrowRight" && !isPanMode) {
         nextPage();
       } else if (event.key === "Escape" && isFullscreen) {
         setIsFullscreen(false);
       } else if (event.key === "f" || event.key === "F") {
         toggleFullscreen();
+      } else if (event.key === " ") {
+        event.preventDefault();
+        resetAll();
       }
     };
 
@@ -82,16 +92,19 @@ const App = () => {
       setPages(initialPages);
       pagesRef.current = initialPages;
 
-      // Inicializar zoom y rotación
+      // Inicializar zoom, rotación y posición de pan
       const initialZooms = {};
       const initialRotations = {};
+      const initialPanPositions = {};
       initialPages.forEach((page) => {
         initialZooms[page.id] = 1;
         initialRotations[page.id] = 0;
+        initialPanPositions[page.id] = { x: 0, y: 0 };
       });
 
       setPageZooms(initialZooms);
       setPageRotations(initialRotations);
+      setPagePanPositions(initialPanPositions);
       setIsLoading(false);
 
       // Cargar primera página
@@ -202,10 +215,93 @@ const App = () => {
       ...prev,
       [pageId]: 1,
     }));
+    setPagePanPositions((prev) => ({
+      ...prev,
+      [pageId]: { x: 0, y: 0 },
+    }));
   };
+
+  // Funciones de pan/arrastre (solo en fullscreen)
+  const handleMouseDown = (e, pageId) => {
+    const zoom = pageZooms[pageId] || 1;
+    if (isFullscreen) {
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX - (pagePanPositions[pageId]?.x || 0),
+        y: e.clientY - (pagePanPositions[pageId]?.y || 0),
+      });
+      e.preventDefault();
+    }
+  };
+
+  const handleMouseMove = (e, pageId) => {
+    if (!isDragging) return;
+
+    const newX = e.clientX - dragStart.x;
+    const newY = e.clientY - dragStart.y;
+
+    setPagePanPositions((prev) => ({
+      ...prev,
+      [pageId]: { x: newX, y: newY },
+    }));
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleWheel = (e, pageId) => {
+    if (isFullscreen && e.ctrlKey) {
+      e.preventDefault();
+      if (e.deltaY < 0) {
+        zoomIn(pageId);
+      } else {
+        zoomOut(pageId);
+      }
+    }
+  };
+
+  // Agregar event listeners globales para mouse
+  useEffect(() => {
+    const currentPageId = pages[currentPage]?.id;
+
+    const handleGlobalMouseMove = (e) => {
+      if (isDragging && currentPageId) {
+        handleMouseMove(e, currentPageId);
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      handleMouseUp();
+    };
+
+    if (isDragging) {
+      document.addEventListener("mousemove", handleGlobalMouseMove);
+      document.addEventListener("mouseup", handleGlobalMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleGlobalMouseMove);
+      document.removeEventListener("mouseup", handleGlobalMouseUp);
+    };
+  }, [isDragging, pages, currentPage]);
 
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
+    resetAll();
+  };
+
+  // Función para resetear todo
+  const resetAll = () => {
+    const resetZooms = {};
+    const resetPanPositions = {};
+    pages.forEach((page) => {
+      resetZooms[page.id] = 1;
+      resetPanPositions[page.id] = { x: 0, y: 0 };
+    });
+    setPageZooms(resetZooms);
+    setPagePanPositions(resetPanPositions);
+    setIsPanMode(false);
   };
 
   const nextPage = () => {
@@ -257,6 +353,7 @@ const App = () => {
 
     const zoom = pageZooms[page.id] || 1;
     const rotation = pageRotations[page.id] || 0;
+    const panPosition = pagePanPositions[page.id] || { x: 0, y: 0 };
 
     return (
       <div
@@ -264,36 +361,47 @@ const App = () => {
           isFullscreen ? "fullscreen-page" : "normal-page"
         } relative`}
       >
-        {/* Controles de zoom y rotación */}
+        {/* Controles de zoom y pantalla completa (solo zoom en fullscreen) */}
         <div
           className={`absolute ${
             isFullscreen ? "top-4 right-4" : "top-2 right-2"
-          } z-20 flex gap-2`}
+          } z-20 flex gap-2 flex-wrap`}
         >
-          <button
-            onClick={() => zoomOut(page.id)}
-            className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white p-2 rounded-lg transition-all shadow-lg"
-            title="Zoom Out"
-          >
-            <ZoomOut className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => resetZoom(page.id)}
-            className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white px-3 py-2 rounded-lg text-sm transition-all shadow-lg"
-            title="Reset Zoom"
-          >
-            {Math.round(zoom * 100)}%
-          </button>
-          <button
-            onClick={() => zoomIn(page.id)}
-            className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white p-2 rounded-lg transition-all shadow-lg"
-            title="Zoom In"
-          >
-            <ZoomIn className="w-5 h-5" />
-          </button>
+          {isFullscreen && (
+            <>
+              <button
+                onClick={() => zoomOut(page.id)}
+                className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white p-2 rounded-lg transition-all shadow-lg"
+                title="Zoom Out"
+              >
+                <ZoomOut className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => resetZoom(page.id)}
+                className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white px-3 py-2 rounded-lg text-sm transition-all shadow-lg"
+                title="Reset Zoom"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+              <button
+                onClick={() => zoomIn(page.id)}
+                className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white p-2 rounded-lg transition-all shadow-lg"
+                title="Zoom In"
+              >
+                <ZoomIn className="w-5 h-5" />
+              </button>
+              <button
+                onClick={resetAll}
+                className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white px-3 py-2 rounded-lg text-sm transition-all shadow-lg"
+                title="Resetear Todo"
+              >
+                <RotateCcw className="w-5 h-5" />
+              </button>
+            </>
+          )}
           <button
             onClick={toggleFullscreen}
-            className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-all shadow-lg"
+            className="bg-black bg-opacity-70 hover:bg-opacity-90 text-white p-2 rounded-lg transition-all shadow-lg"
             title={
               isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"
             }
@@ -307,20 +415,31 @@ const App = () => {
         </div>
 
         {page.image ? (
-          <div className="page-image-container">
+          <div
+            className="page-image-container"
+            onWheel={(e) => handleWheel(e, page.id)}
+          >
             <div
               className="image-wrapper"
               style={{
-                transform: `scale(${zoom}) rotate(${rotation}deg)`,
-                transition: "transform 0.3s ease",
+                transform: `translate(${panPosition.x}px, ${panPosition.y}px) scale(${zoom}) rotate(${rotation}deg)`,
+                transition: isDragging ? "none" : "transform 0.3s ease",
+                cursor: isFullscreen
+                  ? isDragging
+                    ? "grabbing"
+                    : "grab"
+                  : !isFullscreen
+                  ? "pointer"
+                  : "default",
               }}
+              onMouseDown={(e) => handleMouseDown(e, page.id)}
             >
               <img
                 src={page.image}
                 alt={`Página ${page.id}`}
                 className="page-image"
                 onClick={!isFullscreen ? toggleFullscreen : undefined}
-                style={{ cursor: !isFullscreen ? "pointer" : "default" }}
+                draggable={false}
               />
             </div>
           </div>
@@ -341,7 +460,8 @@ const App = () => {
         {!isFullscreen && (
           <div className="text-center text-sm text-gray-500 mt-4 pt-4 border-t">
             Página {page.id} de {pages.length} • Haz clic en la imagen para
-            pantalla completa • F para alternar pantalla completa
+            pantalla completa • F para pantalla completa • Espacio para resetear
+            todo
           </div>
         )}
       </div>
@@ -526,12 +646,14 @@ const App = () => {
           align-items: center;
           justify-content: center;
           overflow: hidden;
+          position: relative;
         }
 
         .image-wrapper {
           display: flex;
           align-items: center;
           justify-content: center;
+          user-select: none;
         }
 
         .page-image {
@@ -540,6 +662,7 @@ const App = () => {
           object-fit: contain;
           border-radius: 8px;
           box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+          user-select: none;
         }
 
         .fullscreen-page .page-image {
