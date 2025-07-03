@@ -12,6 +12,7 @@ import {
   Undo,
   Expand,
   RotateCcw,
+  Download,
 } from "lucide-react";
 
 const App = () => {
@@ -22,6 +23,8 @@ const App = () => {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [totalPages, setTotalPages] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState("");
 
   const pagesRef = useRef([]);
   const [pageZooms, setPageZooms] = useState({});
@@ -62,18 +65,54 @@ const App = () => {
       } else if (event.key === " ") {
         event.preventDefault();
         resetAll();
+      } else if (event.key === "d" || event.key === "D") {
+        if (event.ctrlKey) {
+          event.preventDefault();
+          downloadPDF();
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentPage, totalPages, isTransitioning, isFullscreen]);
+  }, [currentPage, totalPages, isTransitioning, isFullscreen, pdfUrl]);
+
+  // Función para descargar el PDF
+  const downloadPDF = async () => {
+    if (isDownloading || !pdfUrl) return;
+
+    setIsDownloading(true);
+    try {
+      const response = await fetch(pdfUrl);
+      if (!response.ok) {
+        throw new Error("Error al descargar el archivo");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "Suplemento_El_Orden_75_Aniversario_9_de_Julio.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error al descargar el PDF:", error);
+      alert("Error al descargar el archivo. Por favor, intenta nuevamente.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   // Cargar documento PDF
   const loadPDF = async () => {
     try {
       setIsLoading(true);
       const url = "https://staticfiles.magonservices.cloud/Libro.pdf";
+      setPdfUrl(url); // Guardar la URL para descarga
       const loadingTask = window.pdfjsLib.getDocument(url);
       const pdf = await loadingTask.promise;
 
@@ -461,7 +500,7 @@ const App = () => {
           <div className="text-center text-sm text-gray-500 mt-4 pt-4 border-t">
             Página {page.id} de {pages.length} • Haz clic en la imagen para
             pantalla completa • F para pantalla completa • Espacio para resetear
-            todo
+            todo • Ctrl+D para descargar
           </div>
         )}
       </div>
@@ -503,6 +542,20 @@ const App = () => {
               className="bg-amber-600 hover:bg-amber-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white p-4 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl"
             >
               <ChevronRight className="w-8 h-8" />
+            </button>
+
+            {/* Botón de descarga */}
+            <button
+              onClick={downloadPDF}
+              disabled={isDownloading || !pdfUrl}
+              className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white p-4 rounded-full transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
+              title="Descargar PDF completo"
+            >
+              {isDownloading ? (
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+              ) : (
+                <Download className="w-8 h-8" />
+              )}
             </button>
           </div>
         </>
@@ -577,6 +630,20 @@ const App = () => {
             className="nav-btn nav-btn-right"
           >
             <ChevronRight className="w-12 h-12" />
+          </button>
+
+          {/* Botón de descarga en fullscreen */}
+          <button
+            onClick={downloadPDF}
+            disabled={isDownloading || !pdfUrl}
+            className="absolute top-4 left-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white p-3 rounded-lg transition-all shadow-lg"
+            title="Descargar PDF completo"
+          >
+            {isDownloading ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+            ) : (
+              <Download className="w-6 h-6" />
+            )}
           </button>
 
           <div className="fullscreen-info">
